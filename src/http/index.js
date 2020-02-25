@@ -15,22 +15,63 @@ function Http(instanceConfig) {
 /**
  * Dispatch a request
  */
-Http.prototype.request = async function request(config) {
-  const { url, method } = config || {};
-  const data = await fetch(url, {
+Http.prototype.request = async function request(value) {
+  let { url, method, data, config } = value || {};
+
+  let requestConfig = {
     method
-    // headers: { "Content-Type": "application/json" }
-  }).then(response => response.json());
-  return data;
+  };
+
+  // 处理data
+  if (method === "get") {
+    const str = Object.entries(data)
+      .reduce((acc, cur) => acc.concat(cur.join("=")), [])
+      .join("&");
+    url += "?" + str;
+  } else if (method === "post") {
+    // form
+    if (
+      config.headers["Content-Type"] === "application/x-www-form-urlencoded"
+    ) {
+      const form = new FormData();
+      Object.keys(data).forEach(key => {
+        if (Array.isArray(data[key])) {
+          const files = data[key];
+          for (let value of files) {
+            form.append("file", value);
+          }
+        } else {
+          form.append(key, data[key]);
+        }
+      });
+      Object.defineProperty(requestConfig, "body", {
+        value: form
+      });
+    } else if (config.headers["Content-Type"] === "application/json") {
+      // json
+      Object.defineProperty(requestConfig, "body", {
+        value: JSON.stringify(data)
+      });
+    }
+  }
+
+  const responseData = await fetch(url, requestConfig).then(response =>
+    response.json()
+  );
+  return responseData;
 };
 
 ["get", "post"].forEach(method => {
-  Http.prototype[method] = function(url, data, config = {}) {
+  Http.prototype[method] = function(
+    url,
+    data,
+    config = { headers: { "Content-Type": "application/json" } }
+  ) {
     return this.request({
       config,
       method,
-      url: url,
-      data: data
+      url,
+      data
     });
   };
 });
